@@ -64,9 +64,12 @@ else # :dev
     Δt₀ = 1.0
 end
 
+# Optional stop-time override (hours), e.g. ASTEX_STOP=0.02 for a quick build check.
+haskey(ENV, "ASTEX_STOP") && (stop_time = parse(Float64, ENV["ASTEX_STOP"]) * hours)
+
 Nz = length(z_faces) - 1
 ztop = z_faces[end]
-@info "Grid: $Nx × $Ny × $Nz, domain $(Lx) × $(Ly) × $(round(ztop)) m on $(arch)"
+@info "Grid: $Nx × $Ny × $Nz, domain $(Lx) × $(Ly) × $(round(ztop)) m on $(arch); stop_time = $(stop_time)"
 
 grid = RectilinearGrid(arch;
                        size = (Nx, Ny, Nz),

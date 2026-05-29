@@ -79,6 +79,7 @@ StratocumulusTransition/
 ├── astex_case.jl                 # loads the case data; profile/time interpolators + constants
 ├── astex.jl                      # the simulation (dev/production switch via ASTEX_CONFIG)
 ├── analyze_astex.jl              # post-processing: profiles, time series, slice animation
+├── run_astex_debug.sbatch        # GPU debug-queue smoke test (ASTEX_CONFIG=dev)
 ├── run_astex.sbatch              # Perlmutter GPU batch job for the production run
 └── case_data/
     └── astex_input_v5.nc         # authoritative EUCLIPSE/GASS ASTEX case file
@@ -191,13 +192,25 @@ ASTEX_CONFIG=dev julia --project astex.jl
 ASTEX_CONFIG=dev julia --project analyze_astex.jl
 
 # 3. Production run — full paper configuration, 40 h, on a GPU
-#    Edit the #SBATCH -A line to your NERSC allocation first.
 sbatch run_astex.sbatch
 ASTEX_CONFIG=production julia --project analyze_astex.jl
 ```
 
-`ASTEX_CONFIG` is the only environment variable the scripts read; the batch script sets it to
-`production` and points at the juliaup Julia 1.12.4 and the scratch depot.
+On a Slurm cluster (e.g. NERSC Perlmutter) prefer the fast-turnaround **debug** queue for the
+smoke test rather than the login node:
+
+```bash
+sbatch run_astex_debug.sbatch     # GPU debug queue, 30-min limit, runs ASTEX_CONFIG=dev
+```
+
+Environment variables read by the scripts:
+
+| Variable | Meaning |
+|----------|---------|
+| `ASTEX_CONFIG` | `dev` (default) or `production` |
+| `ASTEX_STOP` | optional stop time in **hours**, overriding the config (e.g. `ASTEX_STOP=0.02` for a ~70 s build check) |
+
+The batch scripts also set the juliaup Julia 1.12.4 binary and the scratch Julia depot.
 
 ## Configuration: `dev` vs `production`
 

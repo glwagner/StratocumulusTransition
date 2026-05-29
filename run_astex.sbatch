@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A YOUR_ALLOCATION          # <-- set your NERSC project (e.g. m1234)
+#SBATCH -A m5176_g
 #SBATCH -C gpu
 #SBATCH -q regular
 #SBATCH -t 12:00:00
