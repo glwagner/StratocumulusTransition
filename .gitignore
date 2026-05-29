@@ -1,0 +1,23 @@
+# Julia
+Manifest.toml
+*.cov
+*.jl.mem
+/.julia/
+
+# Simulation output
+*.jld2
+*.nc.tmp
+
+# Figures / animations produced by analyze_astex.jl
+*.png
+*.mp4
+
+# Batch job logs
+astex-*.out
+astex-*.err
+*.out
+*.err
+
+# Editor / OS
+.DS_Store
+*.swp
