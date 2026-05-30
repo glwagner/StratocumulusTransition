@@ -64,9 +64,9 @@ This repository reproduces that case with a cloud-resolving LES.
   - large-scale divergence `D(t)` → subsidence `wˢ(z,t) = −D(t)·min(z, 1600 m)` (constant above
     1600 m),
   - geostrophic wind `u_g(t), v_g(t)`.
-- A **top sponge layer** that damps vertical velocity and relaxes the horizontal wind toward the
-  observed free-atmosphere wind `u_fa(t), v_fa(t)` (avoiding the spurious shear that whole-column
-  geostrophic nudging would create — see the EUCLIPSE notes).
+- A **top sponge layer** that damps vertical velocity to suppress gravity-wave reflection. The
+  free-tropospheric wind is set by the (time-varying) geostrophic forcing rather than by
+  whole-column nudging, avoiding the spurious shear the EUCLIPSE notes warn about.
 - **Bulk surface fluxes** of momentum, heat, and moisture computed from the SST with a
   wind/stability-dependent exchange coefficient.
 
@@ -162,9 +162,8 @@ Reads `ASTEX_CONFIG` (`dev` by default, or `production`) and assembles the model
    the ozone background atmosphere, ASTEX solar geometry, and a configurable update interval.
 6. **Surface fluxes** — `BulkDrag`, `BulkSensibleHeatFlux`, `BulkVaporFlux` with a
    `PolynomialCoefficient` (wind/stability-dependent) driven by `SST`.
-7. **Forcings** — `SubsidenceForcing`, `geostrophic_forcings`, and a `Relaxation` top sponge.
-   The subsidence- and geostrophic-velocity `Field`s are mutated hourly; the sponge nudging targets
-   read the clock time directly.
+7. **Forcings** — `SubsidenceForcing`, `geostrophic_forcings`, and a `Relaxation` top sponge on
+   `w`. The subsidence- and geostrophic-velocity `Field`s are mutated hourly.
 8. **Initial conditions** — profiles from the case file, with small random θ_l and q_t
    perturbations below the inversion to seed turbulence.
 9. **Time-varying callback** (`update_forcings!`, hourly) — refreshes `SST`, the subsidence
@@ -269,7 +268,9 @@ Per Breeze's validation guidance, work up from a short run:
   (rain sedimentation is); this is a candidate enhancement.
 - Ozone is converted from mass to volume mixing ratio for RRTMGP; water vapor for radiation comes
   from the model's prognostic moisture field.
-- Free-atmosphere wind nudging is applied only inside the top sponge.
+- The top sponge damps `w` only; the free-tropospheric wind is set by the geostrophic forcing
+  rather than by relaxing toward the observed free-atmosphere wind `u_fa(t), v_fa(t)` (which the
+  case file also provides).
 
 ## Reference
 

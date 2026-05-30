@@ -16,6 +16,7 @@
 # (`dev` is the default.)
 
 using Breeze
+using Breeze: BulkDrag, BulkSensibleHeatFlux, BulkVaporFlux, PolynomialCoefficient, FilteredSurfaceVelocities
 using Oceananigans
 using Oceananigans.Units
 using Oceananigans.BoundaryConditions: fill_halo_regions!
@@ -26,7 +27,7 @@ using NCDatasets          # RRTMGP lookup tables + case file
 using CUDA
 using Printf
 using Random
-using Dates
+using Dates: DateTime
 
 include("astex_case.jl")
 using .ASTEXCase
@@ -121,15 +122,23 @@ set!(SST, data.SST(0.0))  # horizontally uniform; updated hourly from the time s
 # 2013), and the ozone profile comes from the case file. Solar position is computed from
 # the model clock and the ASTEX location (34°N, 25°W).
 
-clock = Clock(time = DateTime(c.start_year, c.start_month, c.start_day, 0, 0, 0))
+# The model clock counts seconds from zero (so `stop_time`, `Δt`, and schedules are all
+# numeric); the solar position maps model time to the real date via `epoch`.
+epoch = DateTime(c.start_year, c.start_month, c.start_day, 0, 0, 0)
+
+# Pre-materialize the ozone profile into a Field (filled on the CPU via set!) so the
+# radiation kernel reads stored values rather than evaluating the host interpolator on
+# the GPU. data.O₃ is the ozone volume mixing ratio as a function of height.
+O₃ = Field{Nothing, Nothing, Center}(grid)
+set!(O₃, z -> data.O₃(z))
 
 radiation = RadiativeTransferModel(grid, AllSkyOptics(), constants;
                                    surface_temperature = SST,
                                    surface_emissivity = 0.98,
                                    surface_albedo = 0.07,
                                    solar_constant = c.solar_constant,
-                                   solar_position = ApparentSolarPosition(coordinate=(c.longitude, c.latitude)),
-                                   background_atmosphere = BackgroundAtmosphere(O₃ = data.O₃),
+                                   solar_position = ApparentSolarPosition(coordinate=(c.longitude, c.latitude), epoch=epoch),
+                                   background_atmosphere = BackgroundAtmosphere(O₃ = O₃),
                                    liquid_effective_radius = DropletNumberConcentrationRadius(c.droplet_concentration),
                                    schedule = IterationInterval(radiation_interval))
 
@@ -155,11 +164,11 @@ coriolis = FPlane(latitude = c.latitude)
 
 # ## Large-scale forcings (time-varying)
 #
-# Subsidence wˢ(z,t) = −D(t)·min(z, 1600 m) (constant above 1600 m), geostrophic wind
-# ug(t)/vg(t), and a top sponge that damps w → 0 and nudges u,v toward the observed
-# free-atmosphere wind ufa(t)/vfa(t). The subsidence-velocity and geostrophic-velocity
-# `Field`s are mutated hourly by `update_forcings!`; the sponge targets read the clock
-# time directly (Oceananigans `Relaxation` targets are functions of x,y,z,t).
+# Subsidence wˢ(z,t) = −D(t)·min(z, 1600 m) (constant above 1600 m), time-varying
+# geostrophic wind ug(t)/vg(t), and a top sponge that damps w → 0 to suppress gravity-wave
+# reflection. The subsidence- and geostrophic-velocity `Field`s are mutated hourly by
+# `update_forcings!`. The geostrophic forcing (not whole-column nudging) sets the
+# free-tropospheric wind, avoiding the spurious shear the EUCLIPSE notes warn about.
 
 D_LIMIT_HEIGHT = 1600.0
 
@@ -175,19 +184,17 @@ geostrophic = geostrophic_forcings(ug, vg)
 
 sponge_rate = 1 / 60                      # s⁻¹ (1-minute damping timescale)
 sponge_mask = GaussianMask{:z}(center=ztop, width=200)
-u_sponge = Relaxation(rate=sponge_rate, mask=sponge_mask, target=(x, y, z, t) -> data.ufa(t))
-v_sponge = Relaxation(rate=sponge_rate, mask=sponge_mask, target=(x, y, z, t) -> data.vfa(t))
 w_sponge = Relaxation(rate=sponge_rate, mask=sponge_mask)
 
-forcing = (u  = (subsidence, geostrophic.u, u_sponge),
-           v  = (subsidence, geostrophic.v, v_sponge),
+forcing = (u  = (subsidence, geostrophic.u),
+           v  = (subsidence, geostrophic.v),
            w  = w_sponge,
            θ  = subsidence,
            qᵉ = subsidence)
 
 # ## Model
 
-model = AtmosphereModel(grid; clock, dynamics, coriolis, microphysics, radiation,
+model = AtmosphereModel(grid; dynamics, coriolis, microphysics, radiation,
                         momentum_advection, scalar_advection, forcing, boundary_conditions)
 
 # ## Initial conditions
@@ -275,8 +282,8 @@ simulation.output_writers[:profiles] = JLD2Writer(model, avg_outputs;
     schedule = AveragedTimeInterval(30minutes),
     overwrite_existing = true)
 
-# Find a near-cloud-base level for the horizontal slices
-zc = znodes(grid, Center())
+# Find a near-cloud-base level for the horizontal slices (Array() so the search runs on CPU)
+zc = Array(znodes(grid, Center()))
 k = searchsortedfirst(zc, min(600.0, ztop / 2))
 @info "Saving x–y slices at z = $(round(zc[k])) m (k = $k)"
 
