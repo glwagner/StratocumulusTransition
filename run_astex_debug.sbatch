@@ -4,7 +4,8 @@
 #SBATCH -q debug
 #SBATCH -t 00:30:00
 #SBATCH -N 1
-#SBATCH -G 1
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-task=1
 #SBATCH -c 32
 #SBATCH -J astex_dev
 #SBATCH -o astex-dev-%j.out
@@ -29,4 +30,4 @@ export JULIA_CUDA_MEMORY_POOL=none
 
 cd /global/u1/g/glwagner/StratocumulusTransition
 
-srun --gpus-per-task=1 $JULIA --project=. astex.jl
+srun --ntasks=1 --gpus-per-task=1 $JULIA --project=. astex.jl
