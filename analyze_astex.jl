@@ -30,6 +30,7 @@ w²t  = FieldTimeSeries(profiles_file, "w²")
 lwpt = FieldTimeSeries(profiles_file, "LWP")
 
 z = znodes(θlt.grid, Center())
+zf = znodes(θlt.grid, Face())   # w² is averaged from a Face-located field (Nz+1 points)
 times = θlt.times
 Nt = length(times)
 
@@ -45,7 +46,7 @@ for n in 1:Nt
     lines!(axθ,  interior(θlt[n], 1, 1, :),        z, color=colors[n], label=label)
     lines!(axq,  1e3 .* interior(qᵗt[n], 1, 1, :), z, color=colors[n])
     lines!(axqc, 1e3 .* interior(qᶜˡt[n], 1, 1, :), z, color=colors[n])
-    lines!(axw,  interior(w²t[n], 1, 1, :),        z, color=colors[n])
+    lines!(axw,  interior(w²t[n], 1, 1, :),        zf, color=colors[n])
 end
 Legend(fig[1:2, 3], axθ, "time", framevisible=false)
 Label(fig[0, :], "ASTEX transition: mean profile evolution ($config)", fontsize=18, tellwidth=false)
@@ -90,7 +91,8 @@ wxy  = FieldTimeSeries(slices_file, "wxy")
 qcxy = FieldTimeSeries(slices_file, "qᶜˡxy")
 
 x = xnodes(wxz.grid, Center())
-zc = znodes(wxz.grid, Center())
+zc = znodes(wxz.grid, Center())   # cloud liquid (Center in z)
+zw = znodes(wxz.grid, Face())     # vertical velocity (Face in z)
 atimes = wxz.times
 Na = length(atimes)
 
@@ -103,7 +105,7 @@ axqxz = Axis(fanim[2, 2], xlabel="x (m)", ylabel="z (m)", title="cloud liquid (k
 n = Observable(1)
 wxzn  = @lift interior(wxz[$n],  :, 1, :)
 qcxzn = @lift interior(qcxz[$n], :, 1, :)
-hmw = heatmap!(axwxz, x, zc, wxzn,  colormap=:balance, colorrange=(-wlim, wlim))
+hmw = heatmap!(axwxz, x, zw, wxzn,  colormap=:balance, colorrange=(-wlim, wlim))
 hmq = heatmap!(axqxz, x, zc, qcxzn, colormap=Reverse(:Blues_4), colorrange=(0, qlim))
 Colorbar(fanim[2, 0], hmw, flipaxis=false)
 Colorbar(fanim[2, 3], hmq)
